@@ -1,0 +1,267 @@
+{
+    "name": "Meta OAuth Connection",
+    "nodes": [
+        {
+            "parameters": {
+                "httpMethod": "GET",
+                "path": "oauth/meta/callback",
+                "responseMode": "redirect",
+                "options": {}
+            },
+            "id": "webhook-trigger",
+            "name": "Webhook - Meta OAuth Callback",
+            "type": "n8n-nodes-base.webhook",
+            "typeVersion": 1.1,
+            "position": [
+                250,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Extract and validate OAuth parameters\nconst code = $input.first().json.query.code;\nconst state = $input.first().json.query.state;\n\nif (!code || !state) {\n  throw new Error('Missing OAuth parameters');\n}\n\n// Decrypt state (contains userId + nonce + timestamp)\ntry {\n  const crypto = require('crypto');\n  const encryptionKey = Buffer.from($env.ENCRYPTION_KEY, 'hex');\n  \n  const parts = state.split(':');\n  const iv = Buffer.from(parts[0], 'hex');\n  const authTag = Buffer.from(parts[1], 'hex');\n  const encrypted = Buffer.from(parts[2], 'hex');\n  \n  const decipher = crypto.createDecipheriv('aes-256-gcm', encryptionKey, iv);\n  decipher.setAuthTag(authTag);\n  \n  let decrypted = decipher.update(encrypted, 'hex', 'utf8');\n  decrypted += decipher.final('utf8');\n  \n  const stateData = JSON.parse(decrypted);\n  \n  // Validate timestamp (must be < 5 minutes old)\n  const now = Date.now();\n  if (now - stateData.timestamp > 300000) {\n    throw new Error('OAuth state expired');\n  }\n  \n  return {\n    code,\n    userId: stateData.userId,\n    nonce: stateData.nonce\n  };\n  \n} catch (error) {\n  throw new Error('Invalid OAuth state: ' + error.message);\n}"
+            },
+            "id": "validate-state",
+            "name": "Validate State",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                450,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "url": "=https://graph.facebook.com/v19.0/oauth/access_token",
+                "authentication": "genericCredentialType",
+                "genericAuthType": "httpHeaderAuth",
+                "sendQuery": true,
+                "queryParameters": {
+                    "parameters": [
+                        {
+                            "name": "client_id",
+                            "value": "={{$env.META_APP_ID}}"
+                        },
+                        {
+                            "name": "client_secret",
+                            "value": "={{$env.META_APP_SECRET}}"
+                        },
+                        {
+                            "name": "code",
+                            "value": "={{$json.code}}"
+                        },
+                        {
+                            "name": "redirect_uri",
+                            "value": "={{$env.N8N_WEBHOOK_URL}}/oauth/meta/callback"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "exchange-token",
+            "name": "Exchange Code for Token",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                650,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "url": "=https://graph.facebook.com/v19.0/me/adaccounts",
+                "authentication": "genericCredentialType",
+                "genericAuthType": "httpHeaderAuth",
+                "sendQuery": true,
+                "queryParameters": {
+                    "parameters": [
+                        {
+                            "name": "access_token",
+                            "value": "={{$json.access_token}}"
+                        },
+                        {
+                            "name": "fields",
+                            "value": "id,name,account_status,currency,timezone_name"
+                        }
+                    ]
+                },
+                "options": {}
+            },
+            "id": "get-ad-accounts",
+            "name": "Get Ad Accounts",
+            "type": "n8n-nodes-base.httpRequest",
+            "typeVersion": 4.2,
+            "position": [
+                850,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Encrypt access token before saving\nconst crypto = require('crypto');\nconst encryptionKey = Buffer.from($env.ENCRYPTION_KEY, 'hex');\n\nfunction encryptToken(token) {\n  const iv = crypto.randomBytes(16);\n  const cipher = crypto.createCipheriv('aes-256-gcm', encryptionKey, iv);\n  \n  let encrypted = cipher.update(token, 'utf8', 'hex');\n  encrypted += cipher.final('hex');\n  \n  const authTag = cipher.getAuthTag();\n  \n  return iv.toString('hex') + ':' + authTag.toString('hex') + ':' + encrypted;\n}\n\nconst accessToken = $input.first().json.access_token;\nconst userId = $node[\"Validate State\"].json.userId;\nconst adAccounts = $input.first().json.data;\n\n// Prepare data for each ad account\nconst credentials = adAccounts.map(account => ({\n  user_id: userId,\n  platform: 'meta',\n  account_id: account.id.replace('act_', ''), // Remove 'act_' prefix\n  account_name: account.name,\n  access_token: encryptToken(accessToken),\n  refresh_token: null,\n  token_expires_at: null, // Meta tokens don't expire by default\n  is_active: true,\n  sync_status: 'pending',\n  created_at: new Date().toISOString(),\n  updated_at: new Date().toISOString()\n}));\n\nreturn credentials;"
+            },
+            "id": "prepare-credentials",
+            "name": "Prepare Credentials",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1050,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "operation": "insert",
+                "table": "platform_credentials",
+                "columns": "user_id,platform,account_id,account_name,access_token,refresh_token,token_expires_at,is_active,sync_status,created_at,updated_at",
+                "options": {
+                    "onConflict": "DO UPDATE SET access_token = EXCLUDED.access_token, updated_at = NOW()"
+                }
+            },
+            "id": "save-to-db",
+            "name": "Save to Supabase",
+            "type": "n8n-nodes-base.supabase",
+            "typeVersion": 1,
+            "position": [
+                1250,
+                300
+            ],
+            "credentials": {
+                "supabaseApi": {
+                    "id": "1",
+                    "name": "Supabase DashX"
+                }
+            }
+        },
+        {
+            "parameters": {
+                "jsCode": "// Redirect user back to Next.js with success\nconst nextjsUrl = $env.NEXTJS_BASE_URL;\nconst accountsCount = $input.all().length;\n\nreturn {\n  json: {\n    redirectUrl: `${nextjsUrl}/accounts?status=success&accounts=${accountsCount}&platform=meta`\n  }\n};"
+            },
+            "id": "prepare-redirect",
+            "name": "Prepare Redirect",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1450,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "respondWith": "redirect",
+                "redirectURL": "={{$json.redirectUrl}}"
+            },
+            "id": "redirect-response",
+            "name": "Redirect to Next.js",
+            "type": "n8n-nodes-base.respondToWebhook",
+            "typeVersion": 1.1,
+            "position": [
+                1650,
+                300
+            ]
+        },
+        {
+            "parameters": {
+                "jsCode": "// Error handler\nconst error = $input.first().json.error || 'Unknown error';\nconst nextjsUrl = $env.NEXTJS_BASE_URL;\n\nreturn {\n  json: {\n    redirectUrl: `${nextjsUrl}/accounts?status=error&message=${encodeURIComponent(error)}`\n  }\n};"
+            },
+            "id": "error-handler",
+            "name": "Error Handler",
+            "type": "n8n-nodes-base.code",
+            "typeVersion": 2,
+            "position": [
+                1450,
+                500
+            ]
+        }
+    ],
+    "connections": {
+        "Webhook - Meta OAuth Callback": {
+            "main": [
+                [
+                    {
+                        "node": "Validate State",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Validate State": {
+            "main": [
+                [
+                    {
+                        "node": "Exchange Code for Token",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Exchange Code for Token": {
+            "main": [
+                [
+                    {
+                        "node": "Get Ad Accounts",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Get Ad Accounts": {
+            "main": [
+                [
+                    {
+                        "node": "Prepare Credentials",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Prepare Credentials": {
+            "main": [
+                [
+                    {
+                        "node": "Save to Supabase",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Save to Supabase": {
+            "main": [
+                [
+                    {
+                        "node": "Prepare Redirect",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        },
+        "Prepare Redirect": {
+            "main": [
+                [
+                    {
+                        "node": "Redirect to Next.js",
+                        "type": "main",
+                        "index": 0
+                    }
+                ]
+            ]
+        }
+    },
+    "settings": {
+        "executionOrder": "v1",
+        "saveManualExecutions": true,
+        "callerPolicy": "workflowsFromSameOwner",
+        "errorWorkflow": ""
+    },
+    "staticData": null,
+    "tags": [],
+    "triggerCount": 1,
+    "updatedAt": "2026-02-02T12:00:00.000Z",
+    "versionId": "1"
+}
