@@ -37,7 +37,7 @@ export function LoginForm() {
 
     try {
       const supabase = createClient();
-      const { error } = await supabase.auth.signInWithPassword({
+      const { data: authData, error } = await supabase.auth.signInWithPassword({
         email: data.email,
         password: data.password,
       });
@@ -46,14 +46,21 @@ export function LoginForm() {
         throw error;
       }
 
+      if (!authData.session) {
+        throw new Error("Erro ao criar sessão");
+      }
+
       toast({
         title: "Login realizado com sucesso!",
         description: "Redirecionando para o dashboard...",
       });
 
-      router.push("/dashboard");
-      router.refresh();
+      setTimeout(() => {
+        router.push("/dashboard");
+        router.refresh();
+      }, 500);
     } catch (error: any) {
+      console.error("Login error:", error);
       toast({
         variant: "destructive",
         title: "Erro ao fazer login",

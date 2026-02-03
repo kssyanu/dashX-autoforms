@@ -1,34 +1,103 @@
-import { Metadata } from "next";
+"use client";
+
 import Link from "next/link";
 import { SignupForm } from "@/components/auth/signup-form";
-
-export const metadata: Metadata = {
-  title: "Cadastro | DashX",
-  description: "Crie sua conta DashX",
-};
+import { useState } from "react";
+import Image from "next/image";
 
 export default function SignupPage() {
+  const [mousePosition, setMousePosition] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
+  const [isHovering, setIsHovering] = useState(false);
+
+  const handleMouseMove = (e: React.MouseEvent) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMousePosition({
+      x: e.clientX - rect.left,
+      y: e.clientY - rect.top
+    });
+  };
+
   return (
-    <div className="container flex h-screen w-screen flex-col items-center justify-center">
-      <div className="mx-auto flex w-full flex-col justify-center space-y-6 sm:w-[350px]">
-        <div className="flex flex-col space-y-2 text-center">
-          <h1 className="text-2xl font-semibold tracking-tight">
-            Criar conta
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Preencha os dados abaixo para criar sua conta
-          </p>
+    <div className="h-screen w-full bg-background flex items-center justify-center p-4">
+      <div className="card w-full lg:w-[70%] max-w-[1200px] flex flex-col lg:flex-row justify-between h-auto lg:h-[700px] rounded-xl border bg-card shadow-2xl overflow-hidden">
+        {/* Left Section - Form */}
+        <div
+          className="w-full lg:w-1/2 px-6 lg:px-16 py-10 relative overflow-hidden"
+          onMouseMove={handleMouseMove}
+          onMouseEnter={() => setIsHovering(true)}
+          onMouseLeave={() => setIsHovering(false)}
+        >
+          {/* Gradient Effect */}
+          <div
+            className={`absolute pointer-events-none w-[500px] h-[500px] bg-gradient-to-r from-blue-300/20 via-purple-300/20 to-pink-300/20 rounded-full blur-3xl transition-opacity duration-200 ${
+              isHovering ? "opacity-100" : "opacity-0"
+            }`}
+            style={{
+              transform: `translate(${mousePosition.x - 250}px, ${mousePosition.y - 250}px)`,
+              transition: "transform 0.1s ease-out",
+            }}
+          />
+
+          {/* Logo */}
+          <div className="mb-6 flex items-center space-x-2 relative z-10">
+            <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
+              <span className="text-xl font-bold text-primary-foreground">D</span>
+            </div>
+            <span className="text-2xl font-bold">DashX</span>
+          </div>
+
+          {/* Form Content */}
+          <div className="relative z-10 h-full flex flex-col justify-center">
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <h1 className="text-3xl md:text-4xl font-extrabold">Criar conta</h1>
+                <p className="text-sm text-muted-foreground">
+                  Preencha os dados abaixo para começar
+                </p>
+              </div>
+
+              <SignupForm />
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-card px-2 text-muted-foreground">
+                    Já tem uma conta?
+                  </span>
+                </div>
+              </div>
+
+              <Link href="/login">
+                <button className="w-full rounded-md border border-input bg-background px-4 py-2.5 text-sm font-medium transition-all duration-200 hover:bg-accent hover:text-accent-foreground hover:scale-[1.02]">
+                  Fazer login
+                </button>
+              </Link>
+            </div>
+          </div>
         </div>
-        <SignupForm />
-        <p className="px-8 text-center text-sm text-muted-foreground">
-          Já tem uma conta?{" "}
-          <Link
-            href="/login"
-            className="underline underline-offset-4 hover:text-primary"
-          >
-            Faça login
-          </Link>
-        </p>
+
+        {/* Right Section - Image/Illustration */}
+        <div className="hidden lg:block w-1/2 relative overflow-hidden">
+          <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-blue-600/20" />
+          <Image
+            src="https://images.unsplash.com/photo-1460925895917-afdab827c52f?q=80&w=2015"
+            alt="Marketing Data"
+            width={1000}
+            height={700}
+            priority
+            className="w-full h-full object-cover opacity-40"
+          />
+          <div className="absolute inset-0 flex flex-col items-center justify-center p-12 text-center">
+            <h2 className="text-4xl font-bold mb-4">
+              Comece Agora
+            </h2>
+            <p className="text-lg text-muted-foreground max-w-md">
+              Crie sua conta e tenha acesso completo às análises avançadas de suas campanhas
+            </p>
+          </div>
+        </div>
       </div>
     </div>
   );

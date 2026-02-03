@@ -51,6 +51,7 @@ export function SignupForm() {
           data: {
             full_name: data.fullName,
           },
+          emailRedirectTo: `${window.location.origin}/dashboard`,
         },
       });
 
@@ -58,19 +59,17 @@ export function SignupForm() {
         throw signUpError;
       }
 
-      // Create profile
-      if (authData.user) {
-        const { error: profileError } = await supabase
-          .from('profiles')
-          .insert({
-            id: authData.user.id,
-            email: data.email,
-            full_name: data.fullName,
-          });
+      if (!authData.user) {
+        throw new Error("Erro ao criar usuário");
+      }
 
-        if (profileError) {
-          console.error('Error creating profile:', profileError);
-        }
+      // Check if email confirmation is required
+      if (authData.user && !authData.session) {
+        toast({
+          title: "Verifique seu email",
+          description: "Enviamos um link de confirmação para seu email.",
+        });
+        return;
       }
 
       toast({
@@ -78,13 +77,16 @@ export function SignupForm() {
         description: "Redirecionando para o dashboard...",
       });
 
-      router.push("/dashboard");
-      router.refresh();
+      setTimeout(() => {
+        router.push("/dashboard");
+        router.refresh();
+      }, 500);
     } catch (error: any) {
+      console.error("Signup error:", error);
       toast({
         variant: "destructive",
         title: "Erro ao criar conta",
-        description: error.message || "Ocorreu um erro ao criar sua conta. Tente novamente.",
+        description: error.message || "Ocorreu um erro. Verifique sua conexão e tente novamente.",
       });
     } finally {
       setIsLoading(false);
