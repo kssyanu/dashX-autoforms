@@ -1,7 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
-import { Sidebar } from "@/components/layout/sidebar";
-import { Header } from "@/components/layout/header";
+import { DashboardLayoutClient } from "@/components/layout/dashboard-layout-client";
 
 export default async function DashboardLayout({
   children,
@@ -18,22 +17,17 @@ export default async function DashboardLayout({
     redirect("/login");
   }
 
-  // Get user profile
+  // Get user profile (server-side)
   const { data: profile } = await supabase
-    .from('profiles')
-    .select('*')
-    .eq('id', user.id)
+    .from("profiles")
+    .select("*")
+    .eq("id", user.id)
     .single();
 
+  // Pass data to Client Component
   return (
-    <div className="flex h-screen overflow-hidden">
-      <Sidebar />
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <Header user={user} profile={profile} />
-        <main className="flex-1 overflow-y-auto bg-background p-6">
-          {children}
-        </main>
-      </div>
-    </div>
+    <DashboardLayoutClient user={user} profile={profile}>
+      {children}
+    </DashboardLayoutClient>
   );
 }

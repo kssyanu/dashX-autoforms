@@ -11,7 +11,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { LogOut, Settings, User as UserIcon } from "lucide-react";
+import { LogOut, Settings, User as UserIcon, Menu } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -19,9 +19,10 @@ import { useToast } from "@/hooks/use-toast";
 interface HeaderProps {
   user: User;
   profile: any;
+  onMenuClick?: () => void;
 }
 
-export function Header({ user, profile }: HeaderProps) {
+export function Header({ user, profile, onMenuClick }: HeaderProps) {
   const router = useRouter();
   const { toast } = useToast();
 
@@ -48,9 +49,19 @@ export function Header({ user, profile }: HeaderProps) {
   };
 
   return (
-    <header className="flex h-16 items-center justify-between border-b bg-card px-6">
-      <div className="flex items-center space-x-4">
-        <h2 className="text-lg font-semibold">
+    <header className="flex h-16 items-center justify-between border-b bg-card px-4 lg:px-6">
+      <div className="flex items-center space-x-2 lg:space-x-4">
+        {/* Mobile Menu Button */}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="lg:hidden"
+          onClick={onMenuClick}
+        >
+          <Menu className="h-6 w-6" />
+        </Button>
+
+        <h2 className="text-sm lg:text-lg font-semibold">
           Bem-vindo de volta, {profile?.full_name?.split(" ")[0] || "Usuário"}!
         </h2>
       </div>
